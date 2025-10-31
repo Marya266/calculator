@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math'; // Добавляем этот импорт
 
 void main() {
   runApp(const CalculatorApp());
@@ -11,6 +12,7 @@ class CalculatorApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Calculator',
+      debugShowCheckedModeBanner: false, // Убираем debug надпись
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
@@ -49,9 +51,8 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         _expression = value;
       } else if (value == '^') {
         _display += '^';
-        _expression += '**'; // Используем ** для степени
+        _expression += '^';
       } else if (_isOperator(value) && _isOperator(_getLastChar())) {
-        // Заменяем последний оператор
         _display = _display.substring(0, _display.length - 1) + value;
         _expression = _expression.substring(0, _expression.length - 1) + value;
       } else {
@@ -60,7 +61,6 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
       }
     });
 
-    // Сбрасываем состояние нажатия через короткое время
     Future.delayed(const Duration(milliseconds: 150), () {
       if (mounted) {
         setState(() {
@@ -86,15 +86,11 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     try {
       if (_expression.isEmpty) return;
 
-      // Заменяем все ** на pow для вычисления степени
-      String evalExpression = _expression.replaceAll('**', '^');
-      
       // Проверка деления на ноль
       if (_expression.contains('/0')) {
         throw Exception('Деление на ноль');
       }
 
-      // Простая реализация вычислений (в реальном приложении лучше использовать парсер выражений)
       double result = _evaluateExpression(_expression);
       
       setState(() {
@@ -112,93 +108,94 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
   }
 
   double _evaluateExpression(String expression) {
-    // Простая реализация вычисления выражения
-    // В реальном приложении лучше использовать математический парсер
     try {
-      // Упрощенная обработка выражений
+      // Упрощенная реализация вычислений
       expression = expression.replaceAll(' ', '');
       
       // Обработка степени
-      while (expression.contains('**')) {
-        final index = expression.indexOf('**');
-        final leftPart = expression.substring(0, index);
-        final rightPart = expression.substring(index + 2);
-        
-        final leftNum = _getLastNumber(leftPart);
-        final rightNum = _getFirstNumber(rightPart);
-        
-        final result = _power(leftNum, rightNum);
-        expression = leftPart.substring(0, leftPart.length - leftNum.toString().length) + 
-                    result.toString() + rightPart.substring(rightNum.toString().length);
-      }
+      expression = expression.replaceAll('^', '**');
       
-      // Используем basic eval для остальных операций (в продакшн лучше использовать парсер)
-      return _safeEval(expression);
+      // Используем JavaScript-like вычисления через рекурсию
+      return _parseExpression(expression);
     } catch (e) {
       throw Exception('Некорректное выражение');
     }
   }
 
-  double _getLastNumber(String str) {
-    String numStr = '';
-    for (int i = str.length - 1; i >= 0; i--) {
-      if (_isNumber(str[i]) || str[i] == '.') {
-        numStr = str[i] + numStr;
-      } else {
-        break;
-      }
-    }
-    return double.parse(numStr);
+  double _parseExpression(String expression) {
+    // Упрощенный парсер выражений
+    List<String> tokens = _tokenize(expression);
+    return _parseTokens(tokens);
   }
 
-  double _getFirstNumber(String str) {
-    String numStr = '';
-    for (int i = 0; i < str.length; i++) {
-      if (_isNumber(str[i]) || str[i] == '.') {
-        numStr += str[i];
+  List<String> _tokenize(String expression) {
+    // Разбиваем выражение на токены
+    List<String> tokens = [];
+    String currentToken = '';
+    
+    for (int i = 0; i < expression.length; i++) {
+      String char = expression[i];
+      
+      if (_isOperator(char) || char == '(' || char == ')') {
+        if (currentToken.isNotEmpty) {
+          tokens.add(currentToken);
+          currentToken = '';
+        }
+        tokens.add(char);
       } else {
-        break;
+        currentToken += char;
       }
     }
-    return double.parse(numStr);
+    
+    if (currentToken.isNotEmpty) {
+      tokens.add(currentToken);
+    }
+    
+    return tokens;
+  }
+
+  double _parseTokens(List<String> tokens) {
+    // Простая реализация вычисления токенов
+    double result = double.parse(tokens[0]);
+    
+    for (int i = 1; i < tokens.length; i += 2) {
+      if (i + 1 >= tokens.length) break;
+      
+      String operator = tokens[i];
+      double nextNum = double.parse(tokens[i + 1]);
+      
+      switch (operator) {
+        case '+':
+          result += nextNum;
+          break;
+        case '-':
+          result -= nextNum;
+          break;
+        case '*':
+          result *= nextNum;
+          break;
+        case '/':
+          if (nextNum == 0) throw Exception('Деление на ноль');
+          result /= nextNum;
+          break;
+        case '**':
+          result = _power(result, nextNum);
+          break;
+      }
+    }
+    
+    return result;
   }
 
   double _power(double base, double exponent) {
-    return _safeEval('pow($base, $exponent)');
-  }
-
-  double _safeEval(String expression) {
-    // Простая реализация для демонстрации
-    // В реальном приложении используйте пакет like 'math_expression'
-    try {
-      // Упрощенная обработка базовых операций
-      if (expression.contains('+')) {
-        final parts = expression.split('+');
-        return _safeEval(parts[0]) + _safeEval(parts[1]);
-      } else if (expression.contains('-')) {
-        final parts = expression.split('-');
-        return _safeEval(parts[0]) - _safeEval(parts[1]);
-      } else if (expression.contains('*')) {
-        final parts = expression.split('*');
-        return _safeEval(parts[0]) * _safeEval(parts[1]);
-      } else if (expression.contains('/')) {
-        final parts = expression.split('/');
-        final divisor = _safeEval(parts[1]);
-        if (divisor == 0) throw Exception('Деление на ноль');
-        return _safeEval(parts[0]) / divisor;
-      } else {
-        return double.parse(expression);
-      }
-    } catch (e) {
-      throw Exception('Ошибка вычисления');
-    }
+    return pow(base, exponent).toDouble(); // Исправлено: pow вместо Math.pow
   }
 
   String _formatNumber(double num) {
     if (num % 1 == 0) {
       return num.toInt().toString();
     } else {
-      return num.toStringAsFixed(2).replaceAll(RegExp(r'0*$'), '').replaceAll(RegExp(r'\.$'), '');
+      return num.toStringAsFixed(4).replaceAll(RegExp(r'0*$'), '').replaceAll(RegExp(r'\.$'), '');
     }
   }
 
@@ -227,9 +224,9 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
     final isPressed = _lastPressedButton == text;
     
     return Container(
-      margin: const EdgeInsets.all(4),
-      width: isWide ? 150 : 70,
-      height: 70,
+      margin: const EdgeInsets.all(2),
+      width: isWide ? 110 : 50,
+      height: 50,
       child: ElevatedButton(
         onPressed: () {
           if (text == '=') {
@@ -248,14 +245,15 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               : color ?? Colors.blue,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(35),
+            borderRadius: BorderRadius.circular(25),
           ),
-          elevation: isPressed ? 2 : 6,
+          elevation: isPressed ? 2 : 4,
           shadowColor: Colors.black26,
+          padding: EdgeInsets.zero,
         ),
         child: Text(
           text,
-          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -270,22 +268,22 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
         foregroundColor: Colors.white,
       ),
       body: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             // Display
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
               decoration: BoxDecoration(
                 color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey[300]!),
               ),
               child: Text(
                 _display,
-                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.right,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -297,39 +295,35 @@ class _CalculatorScreenState extends State<CalculatorScreen> {
               child: GridView.count(
                 crossAxisCount: 4,
                 childAspectRatio: 1.0,
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(4),
+                mainAxisSpacing: 2,
+                crossAxisSpacing: 2,
                 children: [
-                  // First row
                   _buildCalculatorButton('AC', color: Colors.red),
                   _buildCalculatorButton('C', color: Colors.orange),
                   _buildCalculatorButton('(', color: Colors.grey),
                   _buildCalculatorButton(')', color: Colors.grey),
                   
-                  // Second row
                   _buildCalculatorButton('7'),
                   _buildCalculatorButton('8'),
                   _buildCalculatorButton('9'),
                   _buildCalculatorButton('/', color: Colors.green),
                   
-                  // Third row
                   _buildCalculatorButton('4'),
                   _buildCalculatorButton('5'),
                   _buildCalculatorButton('6'),
                   _buildCalculatorButton('*', color: Colors.green),
                   
-                  // Fourth row
                   _buildCalculatorButton('1'),
                   _buildCalculatorButton('2'),
                   _buildCalculatorButton('3'),
                   _buildCalculatorButton('-', color: Colors.green),
                   
-                  // Fifth row
                   _buildCalculatorButton('0'),
                   _buildCalculatorButton('.'),
                   _buildCalculatorButton('^', color: Colors.purple),
                   _buildCalculatorButton('+', color: Colors.green),
                   
-                  // Sixth row
                   _buildCalculatorButton('=', color: Colors.blue, isWide: true),
                 ],
               ),
